@@ -51,17 +51,18 @@ directory and restart.
 ## Setup
 
 1. **Settings → Devices & Services → Add Integration → RF Device with Learning.**
-2. Give the fan a name and tell the wizard about its remote:
-   - **Speed count** — how many discrete speeds (e.g. 3).
-   - **Separate On button** — tick if the remote has a dedicated On (some only have
-     speed buttons + Off).
-   - **Has a light** — tick if the remote has a light toggle.
-   - **Custom buttons** — a comma/newline-separated list of any extras (e.g.
-     `Reverse, Timer`).
-3. The wizard walks you through learning each button. **Press the button on the
+2. Name the device, pick its **primary entity type** (Fan, Cover, Light or
+   Standalone button), and choose the **RF transmitter** and **frequency**.
+3. Set the options for that type — **speed count** and **separate On button** for a
+   fan, **Stop button** for a cover, **light control type** (one toggle button, or
+   separate on and off) for a light. Every type also takes **Custom buttons**, a
+   comma/newline-separated list of extra one-press codes (e.g. `Reverse, Timer`),
+   and **Capture without the sweep**.
+4. The wizard walks you through learning each button. **Press the button on the
    remote when prompted** — and learn each speed by the speed it *actually*
    produces, not the label printed on the remote (some remotes are mislabelled).
-4. Finish, and your fan/light/button entities appear.
+5. Finish, and your entities appear. Add a **light**, another fan or more buttons
+   later from **Settings → the device → Configure → "Add a new entity"**.
 
 ### Fans that won't learn with the sweep
 
