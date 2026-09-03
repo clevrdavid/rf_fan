@@ -38,6 +38,7 @@ from .const import (
     CMD_OPEN,
     CMD_STOP,
     CONF_COMMANDS,
+    CONF_CUSTOM_BUTTONS,
     CONF_CUSTOMS,
     CONF_DIRECT,
     CONF_ENTITY_TYPE,
@@ -69,17 +70,51 @@ FREQ_OPTIONS = [
     selector.SelectOptionDict(value="915000000", label="915 MHz"),
 ]
 
+# Plain option values - the labels come from translations/<lang>.json under
+# "selector" -> <translation_key> -> "options".
 ENTITY_TYPE_OPTIONS = [
-    selector.SelectOptionDict(value=ENTITY_TYPE_FAN,    label="Ventilador (Fan)"),
-    selector.SelectOptionDict(value=ENTITY_TYPE_COVER,  label="Persiana / Toldo (Cover)"),
-    selector.SelectOptionDict(value=ENTITY_TYPE_LIGHT,  label="Luz (Light)"),
-    selector.SelectOptionDict(value=ENTITY_TYPE_BUTTON, label="Botón suelto (Button)"),
+    ENTITY_TYPE_FAN,
+    ENTITY_TYPE_COVER,
+    ENTITY_TYPE_LIGHT,
+    ENTITY_TYPE_BUTTON,
 ]
 
 LIGHT_MODE_OPTIONS = [
-    selector.SelectOptionDict(value=LIGHT_MODE_TOGGLE, label="Un solo botón (toggle on/off)"),
-    selector.SelectOptionDict(value=LIGHT_MODE_ON_OFF, label="Dos botones (on y off separados)"),
+    LIGHT_MODE_TOGGLE,
+    LIGHT_MODE_ON_OFF,
 ]
+
+# Learn-screen button labels. These land in description_placeholders, which Home
+# Assistant does not translate, so pick the table from hass.config.language.
+_LABELS_EN: dict[str, str] = {
+    CMD_OFF: "Off",
+    CMD_ON: "On",
+    CMD_LIGHT: "Light toggle",
+    CMD_OPEN: "Open",
+    CMD_CLOSE: "Close",
+    CMD_STOP: "Stop",
+    "speed": "Speed {number} of {total}",
+    "speed_lowest": " (lowest)",
+    "speed_highest": " (highest)",
+}
+
+_LABELS_ES: dict[str, str] = {
+    CMD_OFF: "Apagar",
+    CMD_ON: "Encender",
+    CMD_LIGHT: "Luz",
+    CMD_OPEN: "Abrir",
+    CMD_CLOSE: "Cerrar",
+    CMD_STOP: "Stop",
+    "speed": "Velocidad {number} de {total}",
+    "speed_lowest": " (mínima)",
+    "speed_highest": " (máxima)",
+}
+
+
+def _labels_for(hass: Any) -> dict[str, str]:
+    """Return the label table matching the Home Assistant UI language."""
+    language = getattr(getattr(hass, "config", None), "language", "") or ""
+    return _LABELS_ES if language.lower().startswith("es") else _LABELS_EN
 
 
 async def _delayed_capture(device: Any) -> dict[str, Any]:
@@ -97,6 +132,33 @@ def _unique_custom_key(name: str, taken: set[str]) -> str:
         key = f"{base}_{suffix}"
         suffix += 1
     return key
+
+
+def _parse_custom_buttons(raw: Any, taken: set[str]) -> list[dict[str, str]]:
+    """Parse a comma/newline separated list of button names into custom entries.
+
+    Names are stripped, empties dropped and duplicates removed case-insensitively
+    while preserving the order they were typed in.
+    """
+    names: list[str] = []
+    seen: set[str] = set()
+    for chunk in re.split(r"[,\r\n]+", str(raw or "")):
+        name = chunk.strip()
+        if not name:
+            continue
+        lowered = name.casefold()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        names.append(name)
+
+    used = set(taken)
+    customs: list[dict[str, str]] = []
+    for name in names:
+        key = _unique_custom_key(name, used)
+        used.add(key)
+        customs.append({"key": key, "name": name})
+    return customs
 
 
 def _sub_key_prefix(name: str, taken: set[str]) -> str:
@@ -142,7 +204,12 @@ def _build_queue(
         else:
             queue.append(pk(CMD_ON))
             queue.append(pk(CMD_OFF))
-    # ENTITY_TYPE_BUTTON: no queue from entity itself; buttons come from customs
+    elif entity_type == ENTITY_TYPE_BUTTON and key_prefix:
+        # A button sub-entity is a single press stored under its bare prefix -
+        # that is the key button.py looks it up by.
+        queue.append(key_prefix)
+    # A primary ENTITY_TYPE_BUTTON entity has no key of its own; it is made up
+    # entirely of the custom buttons appended below.
     queue += [c["key"] for c in customs]
     return queue
 
@@ -167,30 +234,35 @@ class _LearnFlowMixin:
         """Human-friendly label for a command key."""
         if key is None:
             return ""
+        labels = _labels_for(getattr(self, "hass", None))
+        # A button sub-entity is learned under its bare key_prefix - show its name.
+        for sub_entity in getattr(self, "_sub_entities", []):
+            if sub_entity.get("key_prefix") == key:
+                return sub_entity.get("name") or key
         # Strip key_prefix if present
         bare = key.split("_", 1)[1] if "_" in key and not key.startswith("speed_") and not key.startswith("custom_") else key
         if bare == CMD_OFF or key == CMD_OFF:
-            return "Apagar (Off)"
+            return labels[CMD_OFF]
         if bare == CMD_ON or key == CMD_ON:
-            return "Encender (On)"
+            return labels[CMD_ON]
         if bare == CMD_LIGHT or key == CMD_LIGHT:
-            return "Luz (Light toggle)"
+            return labels[CMD_LIGHT]
         if bare == CMD_OPEN or key == CMD_OPEN:
-            return "Abrir (Open)"
+            return labels[CMD_OPEN]
         if bare == CMD_CLOSE or key == CMD_CLOSE:
-            return "Cerrar (Close)"
+            return labels[CMD_CLOSE]
         if bare == CMD_STOP or key == CMD_STOP:
-            return "Stop"
+            return labels[CMD_STOP]
         if key.startswith("speed_") or bare.startswith("speed_"):
             raw = key if key.startswith("speed_") else bare
             number = raw.removeprefix("speed_")
             total = self._speed_count
             hint = ""
             if number == "1":
-                hint = " (mínima)"
+                hint = labels["speed_lowest"]
             elif number == str(total):
-                hint = " (máxima)"
-            return f"Velocidad {number} de {total}{hint}"
+                hint = labels["speed_highest"]
+            return labels["speed"].format(number=number, total=total) + hint
         return self._custom_names.get(key, key)
 
     def _reset_learn_state(self) -> None:
@@ -401,7 +473,9 @@ class RfFanConfigFlow(_LearnFlowMixin, ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({
             vol.Required(CONF_NAME): selector.TextSelector(),
             vol.Required(CONF_ENTITY_TYPE, default=ENTITY_TYPE_FAN): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=ENTITY_TYPE_OPTIONS)
+                selector.SelectSelectorConfig(
+                    options=ENTITY_TYPE_OPTIONS, translation_key="entity_type"
+                )
             ),
             vol.Required(CONF_TRANSMITTER): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="radio_frequency")
@@ -437,8 +511,13 @@ class RfFanConfigFlow(_LearnFlowMixin, ConfigFlow, domain=DOMAIN):
             # BUTTON: no extra options beyond custom button names
 
             # Parse custom button names
-            self._customs = []
+            taken = set(self._commands) | set(self._custom_names)
+            self._customs = _parse_custom_buttons(
+                user_input.get(CONF_CUSTOM_BUTTONS, ""), taken
+            )
             self._custom_names = {}
+            for custom in self._customs:
+                self._custom_names[custom["key"]] = custom["name"]
 
             self._data[CONF_DIRECT] = self._direct
 
@@ -463,9 +542,16 @@ class RfFanConfigFlow(_LearnFlowMixin, ConfigFlow, domain=DOMAIN):
             fields[vol.Required(CONF_HAS_STOP, default=True)] = selector.BooleanSelector()
         elif entity_type == ENTITY_TYPE_LIGHT:
             fields[vol.Required(CONF_LIGHT_MODE, default=LIGHT_MODE_TOGGLE)] = selector.SelectSelector(
-                selector.SelectSelectorConfig(options=LIGHT_MODE_OPTIONS)
+                selector.SelectSelectorConfig(
+                    options=LIGHT_MODE_OPTIONS, translation_key="light_mode"
+                )
             )
-        # Shared
+        # Shared. A standalone Button entity is nothing but its custom buttons,
+        # so there the list is required rather than optional.
+        marker = vol.Required if entity_type == ENTITY_TYPE_BUTTON else vol.Optional
+        fields[marker(CONF_CUSTOM_BUTTONS, default="")] = selector.TextSelector(
+            selector.TextSelectorConfig(multiline=True)
+        )
         fields[vol.Required(CONF_DIRECT, default=False)] = selector.BooleanSelector()
         return self.async_show_form(
             step_id="entity_options",
@@ -585,7 +671,9 @@ class RfFanOptionsFlow(_LearnFlowMixin, OptionsFlow):
 
         schema = vol.Schema({
             vol.Required(CONF_ENTITY_TYPE, default=ENTITY_TYPE_BUTTON): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=ENTITY_TYPE_OPTIONS)
+                selector.SelectSelectorConfig(
+                    options=ENTITY_TYPE_OPTIONS, translation_key="entity_type"
+                )
             ),
             vol.Required(CONF_NAME): selector.TextSelector(),
         })
@@ -606,8 +694,11 @@ class RfFanOptionsFlow(_LearnFlowMixin, OptionsFlow):
             has_on = False
             has_stop = False
             light_mode = LIGHT_MODE_TOGGLE
-            customs: list[dict] = []
-            custom_names: dict[str, str] = {}
+            taken = set(self._commands or {}) | {c["key"] for c in self._customs}
+            customs: list[dict] = _parse_custom_buttons(
+                user_input.get(CONF_CUSTOM_BUTTONS, ""), taken
+            )
+            custom_names: dict[str, str] = {c["key"]: c["name"] for c in customs}
 
             if entity_type == ENTITY_TYPE_FAN:
                 speed_count = int(user_input.get(CONF_SPEED_COUNT, 3))
@@ -657,8 +748,13 @@ class RfFanOptionsFlow(_LearnFlowMixin, OptionsFlow):
             fields[vol.Required(CONF_HAS_STOP, default=True)] = selector.BooleanSelector()
         elif entity_type == ENTITY_TYPE_LIGHT:
             fields[vol.Required(CONF_LIGHT_MODE, default=LIGHT_MODE_TOGGLE)] = selector.SelectSelector(
-                selector.SelectSelectorConfig(options=LIGHT_MODE_OPTIONS)
+                selector.SelectSelectorConfig(
+                    options=LIGHT_MODE_OPTIONS, translation_key="light_mode"
+                )
             )
+        fields[vol.Optional(CONF_CUSTOM_BUTTONS, default="")] = selector.TextSelector(
+            selector.TextSelectorConfig(multiline=True)
+        )
         return self.async_show_form(
             step_id="add_entity_options",
             data_schema=vol.Schema(fields),

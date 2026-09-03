@@ -19,6 +19,7 @@
           "has_on_button": "Remote has a separate On button",
           "has_stop_button": "Remote has a Stop button",
           "light_mode": "Light control type",
+          "custom_buttons": "Comma or newline separated list of extra one-press buttons (e.g. Reverse, Timer)",
           "direct_capture": "Skip the frequency sweep (try this if the remote won't detect)"
         }
       },
@@ -88,7 +89,8 @@
           "speed_count": "Number of speeds",
           "has_on_button": "Remote has a separate On button",
           "has_stop_button": "Remote has a Stop button",
-          "light_mode": "Light control type"
+          "light_mode": "Light control type",
+          "custom_buttons": "Comma or newline separated list of extra one-press buttons (e.g. Reverse, Timer)"
         }
       },
       "learn_press": {
@@ -120,6 +122,22 @@
     },
     "abort": {
       "no_rf_device": "No RF-capable Broadlink device found. Make sure your Broadlink is online."
+    }
+  },
+  "selector": {
+    "entity_type": {
+      "options": {
+        "fan": "Fan",
+        "cover": "Cover (blind / awning)",
+        "light": "Light",
+        "button": "Standalone button"
+      }
+    },
+    "light_mode": {
+      "options": {
+        "toggle": "One button (toggle on/off)",
+        "on_off": "Two buttons (separate on and off)"
+      }
     }
   }
 }

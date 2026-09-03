@@ -19,6 +19,7 @@
           "has_on_button": "El mando tiene un botón de encendido separado",
           "has_stop_button": "El mando tiene botón de Stop",
           "light_mode": "Tipo de control de luz",
+          "custom_buttons": "Lista de botones extra de una sola pulsación, separados por comas o saltos de línea (p. ej. Reverse, Timer)",
           "direct_capture": "Saltar el barrido de frecuencia (prueba esto si el mando no se detecta)"
         }
       },
@@ -88,7 +89,8 @@
           "speed_count": "Número de velocidades",
           "has_on_button": "El mando tiene un botón de encendido separado",
           "has_stop_button": "El mando tiene botón de Stop",
-          "light_mode": "Tipo de control de luz"
+          "light_mode": "Tipo de control de luz",
+          "custom_buttons": "Lista de botones extra de una sola pulsación, separados por comas o saltos de línea (p. ej. Reverse, Timer)"
         }
       },
       "learn_press": {
@@ -120,6 +122,22 @@
     },
     "abort": {
       "no_rf_device": "No se encontró ningún dispositivo Broadlink con capacidad RF. Asegúrate de que tu Broadlink está en línea."
+    }
+  },
+  "selector": {
+    "entity_type": {
+      "options": {
+        "fan": "Ventilador",
+        "cover": "Persiana / Toldo",
+        "light": "Luz",
+        "button": "Botón suelto"
+      }
+    },
+    "light_mode": {
+      "options": {
+        "toggle": "Un solo botón",
+        "on_off": "Dos botones (on y off separados)"
+      }
     }
   }
 }

@@ -27,6 +27,7 @@ CONF_HAS_STOP = "has_stop_button"
 CONF_LIGHT_MODE = "light_mode"         # "toggle" | "on_off"
 
 CONF_CUSTOMS = "customs"               # stored list of {"key", "name"}
+CONF_CUSTOM_BUTTONS = "custom_buttons"  # form field: comma/newline separated names
 CONF_COMMANDS = "commands"
 CONF_DIRECT = "direct_capture"  # skip the frequency sweep, listen at the set freq
 
