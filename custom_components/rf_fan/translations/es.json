@@ -54,7 +54,8 @@
       "no_rf_device": "No se encontró ningún dispositivo Broadlink con capacidad RF. Configura tu RM4 Pro (o similar) en la integración de Broadlink primero."
     },
     "error": {
-      "learn_failed": "El aprendizaje ha fallado. Por favor, inténtalo de nuevo."
+      "learn_failed": "El aprendizaje ha fallado. Por favor, inténtalo de nuevo.",
+      "no_custom_buttons": "Introduce al menos un nombre de botón (separados por comas o saltos de línea)."
     }
   },
   "options": {

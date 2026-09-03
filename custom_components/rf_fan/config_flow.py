@@ -492,7 +492,47 @@ class RfFanConfigFlow(_LearnFlowMixin, ConfigFlow, domain=DOMAIN):
     async def async_step_entity_options(self, user_input=None) -> ConfigFlowResult:
         entity_type = self._entity_type
 
+        def _show(errors: dict[str, str] | None = None) -> ConfigFlowResult:
+            """Render this step, optionally with per-field errors."""
+            # Build the schema depending on entity type
+            fields: dict = {}
+            if entity_type == ENTITY_TYPE_FAN:
+                fields[vol.Required(CONF_SPEED_COUNT, default=3)] = selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode=selector.NumberSelectorMode.BOX)
+                )
+                fields[vol.Required(CONF_HAS_ON, default=False)] = selector.BooleanSelector()
+            elif entity_type == ENTITY_TYPE_COVER:
+                fields[vol.Required(CONF_HAS_STOP, default=True)] = selector.BooleanSelector()
+            elif entity_type == ENTITY_TYPE_LIGHT:
+                fields[vol.Required(CONF_LIGHT_MODE, default=LIGHT_MODE_TOGGLE)] = selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=LIGHT_MODE_OPTIONS, translation_key="light_mode"
+                    )
+                )
+            # Shared. A standalone Button entity is nothing but its custom buttons,
+            # so there the list is required rather than optional.
+            marker = vol.Required if entity_type == ENTITY_TYPE_BUTTON else vol.Optional
+            fields[marker(CONF_CUSTOM_BUTTONS, default="")] = selector.TextSelector(
+                selector.TextSelectorConfig(multiline=True)
+            )
+            fields[vol.Required(CONF_DIRECT, default=False)] = selector.BooleanSelector()
+            return self.async_show_form(
+                step_id="entity_options",
+                data_schema=vol.Schema(fields),
+                description_placeholders={"entity_type": entity_type},
+                errors=errors or {},
+            )
+
         if user_input is not None:
+            # Parse custom button names
+            taken = set(self._commands) | set(self._custom_names)
+            customs = _parse_custom_buttons(
+                user_input.get(CONF_CUSTOM_BUTTONS, ""), taken
+            )
+            if entity_type == ENTITY_TYPE_BUTTON and not customs:
+                # Nothing to learn, so nothing would be created - ask again.
+                return _show({CONF_CUSTOM_BUTTONS: "no_custom_buttons"})
+
             self._direct = user_input.get(CONF_DIRECT, False)
 
             if entity_type == ENTITY_TYPE_FAN:
@@ -510,11 +550,7 @@ class RfFanConfigFlow(_LearnFlowMixin, ConfigFlow, domain=DOMAIN):
                 self._data[CONF_LIGHT_MODE] = self._light_mode
             # BUTTON: no extra options beyond custom button names
 
-            # Parse custom button names
-            taken = set(self._commands) | set(self._custom_names)
-            self._customs = _parse_custom_buttons(
-                user_input.get(CONF_CUSTOM_BUTTONS, ""), taken
-            )
+            self._customs = customs
             self._custom_names = {}
             for custom in self._customs:
                 self._custom_names[custom["key"]] = custom["name"]
@@ -531,33 +567,7 @@ class RfFanConfigFlow(_LearnFlowMixin, ConfigFlow, domain=DOMAIN):
             )
             return await self.async_step_next()
 
-        # Build the schema depending on entity type
-        fields: dict = {}
-        if entity_type == ENTITY_TYPE_FAN:
-            fields[vol.Required(CONF_SPEED_COUNT, default=3)] = selector.NumberSelector(
-                selector.NumberSelectorConfig(min=1, max=10, step=1, mode=selector.NumberSelectorMode.BOX)
-            )
-            fields[vol.Required(CONF_HAS_ON, default=False)] = selector.BooleanSelector()
-        elif entity_type == ENTITY_TYPE_COVER:
-            fields[vol.Required(CONF_HAS_STOP, default=True)] = selector.BooleanSelector()
-        elif entity_type == ENTITY_TYPE_LIGHT:
-            fields[vol.Required(CONF_LIGHT_MODE, default=LIGHT_MODE_TOGGLE)] = selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=LIGHT_MODE_OPTIONS, translation_key="light_mode"
-                )
-            )
-        # Shared. A standalone Button entity is nothing but its custom buttons,
-        # so there the list is required rather than optional.
-        marker = vol.Required if entity_type == ENTITY_TYPE_BUTTON else vol.Optional
-        fields[marker(CONF_CUSTOM_BUTTONS, default="")] = selector.TextSelector(
-            selector.TextSelectorConfig(multiline=True)
-        )
-        fields[vol.Required(CONF_DIRECT, default=False)] = selector.BooleanSelector()
-        return self.async_show_form(
-            step_id="entity_options",
-            data_schema=vol.Schema(fields),
-            description_placeholders={"entity_type": entity_type},
-        )
+        return _show()
 
     async def async_step_next(self, user_input=None) -> ConfigFlowResult:
         """Advance to the next button to learn, or finish."""
