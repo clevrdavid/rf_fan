@@ -17,6 +17,7 @@ from typing import Any
 from broadlink.exceptions import ReadError, StorageError
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from .const import BROADLINK_DOMAIN
 
@@ -77,6 +78,28 @@ def find_rf_devices(hass: HomeAssistant) -> dict[str, Any]:
         for device in devices.values()
         if hasattr(getattr(device, "api", None), "sweep_frequency")
     }
+
+
+def find_rf_device_for_transmitter(hass: HomeAssistant, entity_id: str) -> Any | None:
+    """Return the BroadlinkDevice that owns a radio_frequency entity.
+
+    Learning must sweep the same unit that the chosen transmitter entity sends
+    through. Returns None when the entity cannot be resolved to an RF-capable
+    Broadlink device.
+    """
+    entity = er.async_get(hass).async_get(entity_id)
+    if entity is None or entity.config_entry_id is None:
+        return None
+    config_entry = hass.config_entries.async_get_entry(entity.config_entry_id)
+    if config_entry is None:
+        return None
+    mac = str(config_entry.data.get("mac", "")).replace(":", "").lower()
+    if not mac:
+        return None
+    for device_mac, device in find_rf_devices(hass).items():
+        if str(device_mac).replace(":", "").lower() == mac:
+            return device
+    return None
 
 
 async def async_sweep_frequency(device: Any) -> float:
