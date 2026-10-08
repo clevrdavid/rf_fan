@@ -58,7 +58,12 @@ from .const import (
     LIGHT_MODE_ON_OFF,
     LIGHT_MODE_TOGGLE,
 )
-from .rf import async_capture_packet, async_sweep_frequency, find_rf_devices
+from .rf import (
+    async_capture_packet,
+    async_sweep_frequency,
+    find_rf_device_for_transmitter,
+    find_rf_devices,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -386,7 +391,10 @@ class RfFanConfigFlow(_LearnFlowMixin, ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="no_rf_device")
 
         if user_input is not None:
-            self._device = next(iter(devices.values()))
+            self._device = (
+                find_rf_device_for_transmitter(self.hass, user_input[CONF_TRANSMITTER])
+                or next(iter(devices.values()))
+            )
             self._entity_type = user_input[CONF_ENTITY_TYPE]
             self._transmitter = user_input[CONF_TRANSMITTER]
             self._frequency = int(user_input[CONF_FREQUENCY])
@@ -542,7 +550,10 @@ class RfFanOptionsFlow(_LearnFlowMixin, OptionsFlow):
         devices = find_rf_devices(self.hass)
         if not devices:
             return self.async_abort(reason="no_rf_device")
-        self._device = next(iter(devices.values()))
+        self._device = (
+            find_rf_device_for_transmitter(self.hass, self._transmitter)
+            or next(iter(devices.values()))
+        )
 
         return self.async_show_menu(
             step_id="init", menu_options=["relearn", "add_entity", "finish"]
