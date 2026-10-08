@@ -142,7 +142,10 @@ def _build_queue(
         else:
             queue.append(pk(CMD_ON))
             queue.append(pk(CMD_OFF))
-    # ENTITY_TYPE_BUTTON: no queue from entity itself; buttons come from customs
+    elif entity_type == ENTITY_TYPE_BUTTON:
+        # A button sub-entity learns a single code under its key_prefix
+        queue.append(key_prefix or "button")
+    # flat custom buttons (setup flow) come from customs
     queue += [c["key"] for c in customs]
     return queue
 
@@ -581,6 +584,9 @@ class RfFanOptionsFlow(_LearnFlowMixin, OptionsFlow):
             self._adding_name = (user_input.get(CONF_NAME) or "").strip()
             if not self._adding_name:
                 return await self.async_step_init()
+            if self._adding_entity_type == ENTITY_TYPE_BUTTON:
+                # Buttons need no type-specific options; go straight to learning
+                return await self.async_step_add_entity_options({})
             return await self.async_step_add_entity_options()
 
         schema = vol.Schema({
@@ -627,6 +633,8 @@ class RfFanOptionsFlow(_LearnFlowMixin, OptionsFlow):
                 "has_stop": has_stop,
                 "light_mode": light_mode,
             })
+            # Friendly label for the learn screen
+            self._custom_names[self._adding_key_prefix] = self._adding_name
             # Merge new customs
             self._customs.extend(customs)
             self._custom_names.update(custom_names)
